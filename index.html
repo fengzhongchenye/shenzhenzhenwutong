@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深圳政府通知公告聚合</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f7fa; }
+        h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 10px; }
+        .notice { background: white; border-left: 4px solid #e94560; padding: 12px 15px; margin: 10px 0; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .notice a { font-size: 16px; color: #16213e; text-decoration: none; font-weight: bold; }
+        .notice a:hover { text-decoration: underline; }
+        .meta { font-size: 13px; color: #555; margin-top: 4px; }
+        .meta span { margin-right: 15px; }
+        .source { background: #e94560; color: white; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+        .loading { text-align: center; padding: 50px; color: #999; }
+        .empty { text-align: center; padding: 50px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>📢 深圳政府通知公告</h1>
+    <p style="color:#666;">仅显示2026年5月1日之后发布的通知（每天早上9点更新）</p>
+    <div id="notice-container" class="loading">正在加载通知...</div>
+
+    <script>
+        const CUTOFF_DATE = new Date("2026-05-01");
+        const CONTAINER = document.getElementById("notice-container");
+
+        fetch("notices.json")
+            .then(res => res.json())
+            .then(data => {
+                // 过滤出2026-05-01之后的公告
+                const filtered = data.filter(item => {
+                    const d = new Date(item.date);
+                    return d >= CUTOFF_DATE;
+                });
+                // 按日期倒序排列
+                filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                if (filtered.length === 0) {
+                    CONTAINER.innerHTML = '<div class="empty">暂无符合条件的通知公告。</div>';
+                    return;
+                }
+
+                let html = "";
+                filtered.forEach(item => {
+                    html += `
+                    <div class="notice">
+                        <a href="${item.link}" target="_blank">${item.title}</a>
+                        <div class="meta">
+                            <span>📅 ${item.date}</span>
+                            <span class="source">${item.source}</span>
+                        </div>
+                    </div>`;
+                });
+                CONTAINER.innerHTML = html;
+            })
+            .catch(err => {
+                CONTAINER.innerHTML = '<div class="empty">加载失败，请稍后再试。</div>';
+                console.error(err);
+            });
+    </script>
+</body>
+</html>
