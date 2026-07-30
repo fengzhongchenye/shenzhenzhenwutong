@@ -6,12 +6,16 @@ on:
     - cron: "0 1 * * *"
   workflow_dispatch:   # 允许手动触发
 
+# 👇 添加这一行，给工作流写入仓库的权限
+permissions:
+  contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4    # 这个版本目前还是 v4，可以继续用
 
       - name: Set up Python
         uses: actions/setup-python@v5
