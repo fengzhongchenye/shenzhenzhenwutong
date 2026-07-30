@@ -35,7 +35,7 @@ sources = [
     },
     {
         "name": "深圳市中小企业服务局",
-        "url": "http://zxqyj.sz.gov.cn/xxgk/tzgg/",
+        "url": "http://zxqyj.sz.gov.cn/zwgk/tzgg/",
         "list_selector": "ul.list-main li",
         "title_selector": "a",
         "link_selector": "a",
@@ -44,7 +44,7 @@ sources = [
     # 福田区
     {
         "name": "福田区工业和信息化局",
-        "url": "http://www.szft.gov.cn/ftq/zfbm/gxj/tzgg/",
+        "url": "http://www.szft.gov.cn/bmxx/qgxj/tzgg/",
         "list_selector": "ul.list li",
         "title_selector": "a",
         "link_selector": "a",
@@ -52,7 +52,7 @@ sources = [
     },
     {
         "name": "福田区科技创新局",
-        "url": "http://www.szft.gov.cn/ftq/zfbm/kjcxj/tzgg/",
+        "url": "http://www.szft.gov.cn/bmxx/qkjj/tzgg/",
         "list_selector": "ul.list li",
         "title_selector": "a",
         "link_selector": "a",
@@ -61,7 +61,7 @@ sources = [
     # 罗湖区
     {
         "name": "罗湖区工业和信息化局",
-        "url": "http://www.szlh.gov.cn/lhq/zfbm/gxj/tzgg/",
+        "url": "http://www.szlh.gov.cn/xxgk/ztzl/lhqgxj/tzgg/",
         "list_selector": "ul.list li",
         "title_selector": "a",
         "link_selector": "a",
@@ -69,7 +69,7 @@ sources = [
     },
     {
         "name": "罗湖区科技创新局",
-        "url": "http://www.szlh.gov.cn/lhq/zfbm/kjcxj/tzgg/",
+        "url": "http://www.szlh.gov.cn/xxgk/ztzl/lhqkjj/tzgg/",
         "list_selector": "ul.list li",
         "title_selector": "a",
         "link_selector": "a",
