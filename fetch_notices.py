@@ -11,52 +11,67 @@ headers = {
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
 
-# 失败的网站使用代理
-USE_PROXY = True
-
-def fetch_url(url, use_proxy=False):
-    """获取网页，可选择使用代理"""
-    # 直接请求
-    if not use_proxy:
+def fetch_with_retry(url, use_proxy=False):
+    """尝试多种方式获取网页"""
+    # 方式一：直接请求
+    try:
+        resp = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+        if resp.status_code == 200:
+            return resp
+    except:
+        pass
+    
+    # 方式二：如果是 https，尝试 http
+    if url.startswith("https://"):
         try:
-            resp = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+            http_url = url.replace("https://", "http://", 1)
+            resp = requests.get(http_url, headers=headers, timeout=20, allow_redirects=True)
             if resp.status_code == 200:
                 return resp
         except:
             pass
-
-    # 使用 allorigins 代理（免费、稳定）
-    proxy_url = f"https://api.allorigins.win/raw?url={url}"
-    resp = requests.get(proxy_url, headers={**headers, "Host": None}, timeout=30)
-    return resp
+    
+    # 方式三：使用代理
+    if use_proxy:
+        proxies_to_try = [
+            f"https://api.allorigins.win/raw?url={url}",
+            f"https://corsproxy.io/?{url}",
+        ]
+        for proxy_url in proxies_to_try:
+            try:
+                resp = requests.get(proxy_url, headers={**headers, "Host": None}, timeout=30)
+                if resp.status_code == 200:
+                    return resp
+            except:
+                continue
+    
+    return None
 
 
 sources = [
-    # ===== 市级（正常网站）=====
-    {"name": "深圳市工业和信息化局", "url": "http://gxj.sz.gov.cn/xxgk/xxgkml/qt/tzgg/", "type": "normal", "proxy": False},
-    {"name": "深圳市科技创新局", "url": "http://stic.sz.gov.cn/xxgk/tzgg/", "type": "normal", "proxy": False},
-    # ===== 龙岗区（正常网站）=====
-    {"name": "龙岗区科技创新局", "url": "http://www.lg.gov.cn/bmzz/kjj/xxgk/qt/tzgg/", "type": "normal", "proxy": False},
-    {"name": "龙岗区工业和信息化局", "url": "http://www.lg.gov.cn/bmzz/gxj/xxgk/qt/tzgg/", "type": "normal", "proxy": False},
-    # ===== 龙华区（正常网站）=====
-    {"name": "龙华区工业和信息化局", "url": "http://www.szlhq.gov.cn/bmxxgk/jjcjj/dtxx_124217/tzgg_124219/", "type": "normal", "proxy": False},
-    {"name": "龙华区科技创新局", "url": "http://www.szlhq.gov.cn/bmxxgk/kjcxj/dtxx_124254/tzgg_124256/", "type": "normal", "proxy": False},
-    # ===== 以下网站使用代理 =====
-    {"name": "深圳市中小企业服务局", "url": "https://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html", "type": "normal", "proxy": True},
-    {"name": "福田区工业和信息化局", "url": "https://www.szft.gov.cn/bmxx/qgxj/tzgg/", "type": "normal", "proxy": True},
-    {"name": "福田区科技创新局", "url": "https://www.szft.gov.cn/bmxx/qkjj/tzgg/index.html", "type": "normal", "proxy": True},
-    {"name": "罗湖区科技和工业信息化局", "url": "https://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "坪山区科技创新局", "url": "https://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "坪山区工业和信息化局", "url": "https://www.szpsq.gov.cn/psjjhkjcjj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "光明区科技创新局", "url": "https://www.szgm.gov.cn/gmkjcxj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "光明区工业和信息化局", "url": "https://www.szgm.gov.cn/gmjjfw/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "大鹏新区科技和工业信息化局", "url": "https://www.dpxq.gov.cn/dpkjcxjjfwj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "宝安区科技创新局", "url": "https://www.baoan.gov.cn/bakj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "宝安区工业和信息化局", "url": "https://www.baoan.gov.cn/bajjcj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "南山区科技创新局", "url": "https://www.szns.gov.cn/nsqkcj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "南山区工业和信息化局", "url": "https://www.szns.gov.cn/nsqjjcjj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "盐田区科技创新局", "url": "https://www.yantian.gov.cn/ytkcj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
-    {"name": "盐田区工业和信息化局", "url": "https://www.yantian.gov.cn/ytgyhxxhj/gkmlpt/index", "type": "gkmlpt", "proxy": True},
+    # ===== 成功名单（不代理）=====
+    {"name": "深圳市工业和信息化局", "url": "http://gxj.sz.gov.cn/xxgk/xxgkml/qt/tzgg/", "type": "normal"},
+    {"name": "深圳市科技创新局", "url": "http://stic.sz.gov.cn/xxgk/tzgg/", "type": "normal"},
+    {"name": "龙岗区科技创新局", "url": "http://www.lg.gov.cn/bmzz/kjj/xxgk/qt/tzgg/", "type": "normal"},
+    {"name": "龙岗区工业和信息化局", "url": "http://www.lg.gov.cn/bmzz/gxj/xxgk/qt/tzgg/", "type": "normal"},
+    {"name": "龙华区工业和信息化局", "url": "http://www.szlhq.gov.cn/bmxxgk/jjcjj/dtxx_124217/tzgg_124219/", "type": "normal"},
+    {"name": "龙华区科技创新局", "url": "http://www.szlhq.gov.cn/bmxxgk/kjcxj/dtxx_124254/tzgg_124256/", "type": "normal"},
+    {"name": "福田区工业和信息化局", "url": "https://www.szft.gov.cn/bmxx/qgxj/tzgg/", "type": "normal"},
+    {"name": "福田区科技创新局", "url": "https://www.szft.gov.cn/bmxx/qkjj/tzgg/index.html", "type": "normal"},
+    # ===== 尝试 http 协议 =====
+    {"name": "深圳市中小企业服务局", "url": "http://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html", "type": "normal"},
+    {"name": "罗湖区科技和工业信息化局", "url": "http://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "坪山区科技创新局", "url": "http://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "坪山区工业和信息化局", "url": "http://www.szpsq.gov.cn/psjjhkjcjj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "光明区科技创新局", "url": "http://www.szgm.gov.cn/gmkjcxj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "光明区工业和信息化局", "url": "http://www.szgm.gov.cn/gmjjfw/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "大鹏新区科技和工业信息化局", "url": "http://www.dpxq.gov.cn/dpkjcxjjfwj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "宝安区科技创新局", "url": "http://www.baoan.gov.cn/bakj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "宝安区工业和信息化局", "url": "http://www.baoan.gov.cn/bajjcj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "南山区科技创新局", "url": "http://www.szns.gov.cn/nsqkcj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "南山区工业和信息化局", "url": "http://www.szns.gov.cn/nsqjjcjj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "盐田区科技创新局", "url": "http://www.yantian.gov.cn/ytkcj/gkmlpt/index", "type": "gkmlpt"},
+    {"name": "盐田区工业和信息化局", "url": "http://www.yantian.gov.cn/ytgyhxxhj/gkmlpt/index", "type": "gkmlpt"},
 ]
 
 TITLE_BLACKLIST = [
@@ -87,9 +102,9 @@ def extract_date(text):
 all_notices = []
 
 for src in sources:
-    print(f"正在抓取: {src['name']} {'(代理)' if src['proxy'] else ''}...")
+    print(f"正在抓取: {src['name']}...")
     try:
-        resp = fetch_url(src["url"], use_proxy=src["proxy"])
+        resp = fetch_with_retry(src["url"], use_proxy=True)
         if not resp or resp.status_code != 200:
             print(f"  ❌ HTTP {resp.status_code if resp else 'error'}")
             continue
