@@ -1,11 +1,18 @@
+import requests
+from bs4 import BeautifulSoup
 import json
 import re
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
-# 所有单位配置
-sources = [
-    # ===== 正常页面（静态网站）=====
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+}
+
+# ===== 静态网站（用 requests，快且稳定）=====
+static_sources = [
     {"name": "深圳市工业和信息化局", "url": "http://gxj.sz.gov.cn/xxgk/xxgkml/qt/tzgg/"},
     {"name": "深圳市科技创新局", "url": "http://stic.sz.gov.cn/xxgk/tzgg/"},
     {"name": "龙岗区科技创新局", "url": "http://www.lg.gov.cn/bmzz/kjj/xxgk/qt/tzgg/"},
@@ -15,7 +22,10 @@ sources = [
     {"name": "福田区工业和信息化局", "url": "https://www.szft.gov.cn/bmxx/qgxj/tzgg/"},
     {"name": "福田区科技创新局", "url": "https://www.szft.gov.cn/bmxx/qkjj/tzgg/index.html"},
     {"name": "深圳市中小企业服务局", "url": "http://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html"},
-    # ===== 动态页面（政府信息公开平台）=====
+]
+
+# ===== 动态网站（用 Playwright，能执行JavaScript）=====
+dynamic_sources = [
     {"name": "罗湖区科技和工业信息化局", "url": "https://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index"},
     {"name": "坪山区科技创新局", "url": "https://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index"},
     {"name": "坪山区工业和信息化局", "url": "https://www.szpsq.gov.cn/psjjhkjcjj/gkmlpt/index"},
@@ -37,28 +47,149 @@ TITLE_BLACKLIST = [
 ]
 
 def is_valid_title(title):
-    return len(title) >= 5 and not any(bad.lower() in title.lower() for bad in TITLE_BLACKLIST)
+    if len(title) < 5:
+        return False
+    for bad in TITLE_BLACKLIST:
+        if bad.lower() in title.lower():
+            return False
+    return True
 
 def extract_date(text):
-    m = re.search(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", text) or re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
-    if m:
-        return f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+    patterns = [
+        r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})",
+        r"(\d{4})年(\d{1,2})月(\d{1,2})日",
+    ]
+    for p in patterns:
+        m = re.search(p, text)
+        if m:
+            return f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+    return None
+
+def fetch_url(url):
+    try:
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        if resp.status_code == 200:
+            return resp
+    except:
+        pass
+    
+    if url.startswith("https://"):
+        try:
+            http_url = url.replace("https://", "http://", 1)
+            resp = requests.get(http_url, headers=headers, timeout=15, allow_redirects=True)
+            if resp.status_code == 200:
+                return resp
+        except:
+            pass
     return None
 
 all_notices = []
 
+# ========== 第一步：抓取静态网站 ==========
+print("=" * 50)
+print("第一部分：抓取静态网站（requests）")
+print("=" * 50)
+
+for src in static_sources:
+    print(f"\n正在抓取: {src['name']}...")
+    try:
+        resp = fetch_url(src["url"])
+        if not resp or resp.status_code != 200:
+            print(f"  ❌ HTTP {resp.status_code if resp else 'error'}")
+            continue
+        
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        items = []
+        
+        selectors = ["ul.list-main li a", "ul li a", ".list-content li a", ".news-list li a", "ul.list li a"]
+        for sel in selectors:
+            candidates = soup.select(sel)
+            valid = [a for a in candidates if is_valid_title(a.get_text(strip=True))]
+            if valid:
+                items = valid
+                print(f"  选择器 '{sel}' -> {len(items)} 条")
+                break
+        
+        if not items:
+            all_a = soup.find_all("a", href=True)
+            items = [a for a in all_a if ("/content/post_" in a.get("href","") or "/tzgg/" in a.get("href","")) and is_valid_title(a.get_text(strip=True))]
+            if items:
+                print(f"  通用匹配 -> {len(items)} 条")
+        
+        for a_tag in items[:30]:
+            try:
+                title = re.sub(r'^[\d\.\、\s]+', '', a_tag.get_text(strip=True))
+                link = a_tag.get("href", "")
+                if not title or not link:
+                    continue
+                
+                if link.startswith("//"):
+                    link = "https:" + link
+                elif link.startswith("/"):
+                    base = re.match(r"(https?://[^/]+)", src["url"])
+                    if base:
+                        link = base.group(1) + link
+                elif not link.startswith("http"):
+                    link = src["url"].rstrip("/") + "/" + link.lstrip("/")
+                
+                pub_date = extract_date(str(a_tag.parent)) or extract_date(title) or datetime.now().strftime("%Y-%m-%d")
+                
+                all_notices.append({
+                    "source": src["name"],
+                    "title": title,
+                    "link": link,
+                    "date": pub_date,
+                })
+                print(f"  ✅ {title[:50]}... {pub_date}")
+            except:
+                continue
+        
+        if not items:
+            print(f"  ❌ 未提取到公告")
+            
+    except Exception as e:
+        print(f"  ❌ {str(e)[:100]}")
+
+# ========== 第二步：抓取动态网站 ==========
+print("\n" + "=" * 50)
+print("第二部分：抓取动态网站（Playwright）")
+print("=" * 50)
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
-    context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    page = context.new_page()
     
-    for src in sources:
-        print(f"正在抓取: {src['name']}...")
+    for src in dynamic_sources:
+        print(f"\n正在抓取: {src['name']}...")
         try:
-            page.goto(src["url"], timeout=30000, wait_until="networkidle")
-            page.wait_for_timeout(3000)  # 等3秒确保动态内容加载
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ignore_https_errors=True,  # 忽略SSL证书错误
+            )
+            page = context.new_page()
             
-            # 获取所有包含公告链接的a标签
+            # 尝试访问，超时设置短一点
+            try:
+                page.goto(src["url"], timeout=20000, wait_until="domcontentloaded")
+            except:
+                # 如果正常访问失败，尝试 http
+                if src["url"].startswith("https://"):
+                    try:
+                        http_url = src["url"].replace("https://", "http://", 1)
+                        page.goto(http_url, timeout=20000, wait_until="domcontentloaded")
+                    except:
+                        print(f"  ❌ 无法访问")
+                        context.close()
+                        continue
+                else:
+                    print(f"  ❌ 无法访问")
+                    context.close()
+                    continue
+            
+            # 等待动态内容加载
+            page.wait_for_timeout(5000)
+            
+            # 获取所有包含公告特征的链接
             links = page.query_selector_all("a")
             count = 0
             for a_tag in links[:50]:
@@ -77,7 +208,8 @@ with sync_playwright() as p:
                     if href.startswith("//"):
                         href = "https:" + href
                     elif href.startswith("/"):
-                        href = page.url.split("/")[0] + "//" + page.url.split("/")[2] + href
+                        domain = src["url"].split("/")[0] + "//" + src["url"].split("/")[2]
+                        href = domain + href
                     
                     # 提取日期
                     parent_text = a_tag.evaluate("el => el.parentElement?.innerText || ''")
@@ -94,12 +226,14 @@ with sync_playwright() as p:
                     continue
             
             print(f"  ✅ 抓到 {count} 条")
+            context.close()
+            
         except Exception as e:
             print(f"  ❌ {str(e)[:100]}")
     
     browser.close()
 
-# 去重
+# ========== 去重和排序 ==========
 seen = set()
 unique = [n for n in all_notices if n["link"] not in seen and not seen.add(n["link"])]
 unique.sort(key=lambda x: x["date"], reverse=True)
@@ -107,7 +241,9 @@ unique.sort(key=lambda x: x["date"], reverse=True)
 with open("notices.json", "w", encoding="utf-8") as f:
     json.dump(unique, f, ensure_ascii=False, indent=2)
 
-print(f"\n✅ 共 {len(unique)} 条")
+print(f"\n{'=' * 50}")
+print(f"✅ 总共 {len(unique)} 条公告")
+print(f"{'=' * 50}")
 from collections import Counter
 for name, count in Counter(n["source"] for n in unique).most_common():
     print(f"  {name}: {count} 条")
