@@ -11,7 +11,7 @@ headers = {
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
 
-# ===== 静态网站（用 requests，快且稳定）=====
+# ===== 静态网站 =====
 static_sources = [
     {"name": "深圳市工业和信息化局", "url": "http://gxj.sz.gov.cn/xxgk/xxgkml/qt/tzgg/"},
     {"name": "深圳市科技创新局", "url": "http://stic.sz.gov.cn/xxgk/tzgg/"},
@@ -24,20 +24,20 @@ static_sources = [
     {"name": "深圳市中小企业服务局", "url": "http://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html"},
 ]
 
-# ===== 动态网站（用 Playwright，能执行JavaScript）=====
+# ===== 动态网站 =====
 dynamic_sources = [
-    {"name": "罗湖区科技和工业信息化局", "url": "https://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index"},
-    {"name": "坪山区科技创新局", "url": "https://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index"},
-    {"name": "坪山区工业和信息化局", "url": "https://www.szpsq.gov.cn/psjjhkjcjj/gkmlpt/index"},
-    {"name": "光明区科技创新局", "url": "https://www.szgm.gov.cn/gmkjcxj/gkmlpt/index"},
-    {"name": "光明区工业和信息化局", "url": "https://www.szgm.gov.cn/gmjjfw/gkmlpt/index"},
-    {"name": "大鹏新区科技和工业信息化局", "url": "https://www.dpxq.gov.cn/dpkjcxjjfwj/gkmlpt/index"},
-    {"name": "宝安区科技创新局", "url": "https://www.baoan.gov.cn/bakj/gkmlpt/index"},
-    {"name": "宝安区工业和信息化局", "url": "https://www.baoan.gov.cn/bajjcj/gkmlpt/index"},
-    {"name": "南山区科技创新局", "url": "https://www.szns.gov.cn/nsqkcj/gkmlpt/index"},
-    {"name": "南山区工业和信息化局", "url": "https://www.szns.gov.cn/nsqjjcjj/gkmlpt/index"},
-    {"name": "盐田区科技创新局", "url": "https://www.yantian.gov.cn/ytkcj/gkmlpt/index"},
-    {"name": "盐田区工业和信息化局", "url": "https://www.yantian.gov.cn/ytgyhxxhj/gkmlpt/index"},
+    {"name": "罗湖区科技和工业信息化局", "url": "http://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index"},
+    {"name": "坪山区科技创新局", "url": "http://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index"},
+    {"name": "坪山区工业和信息化局", "url": "http://www.szpsq.gov.cn/psjjhkjcjj/gkmlpt/index"},
+    {"name": "光明区科技创新局", "url": "http://www.szgm.gov.cn/gmkjcxj/gkmlpt/index"},
+    {"name": "光明区工业和信息化局", "url": "http://www.szgm.gov.cn/gmjjfw/gkmlpt/index"},
+    {"name": "大鹏新区科技和工业信息化局", "url": "http://www.dpxq.gov.cn/dpkjcxjjfwj/gkmlpt/index"},
+    {"name": "宝安区科技创新局", "url": "http://www.baoan.gov.cn/bakj/gkmlpt/index"},
+    {"name": "宝安区工业和信息化局", "url": "http://www.baoan.gov.cn/bajjcj/gkmlpt/index"},
+    {"name": "南山区科技创新局", "url": "http://www.szns.gov.cn/nsqkcj/gkmlpt/index"},
+    {"name": "南山区工业和信息化局", "url": "http://www.szns.gov.cn/nsqjjcjj/gkmlpt/index"},
+    {"name": "盐田区科技创新局", "url": "http://www.yantian.gov.cn/ytkcj/gkmlpt/index"},
+    {"name": "盐田区工业和信息化局", "url": "http://www.yantian.gov.cn/ytgyhxxhj/gkmlpt/index"},
 ]
 
 TITLE_BLACKLIST = [
@@ -85,7 +85,7 @@ def fetch_url(url):
 
 all_notices = []
 
-# ========== 第一步：抓取静态网站 ==========
+# ========== 第一部分：静态网站 ==========
 print("=" * 50)
 print("第一部分：抓取静态网站（requests）")
 print("=" * 50)
@@ -151,46 +151,57 @@ for src in static_sources:
     except Exception as e:
         print(f"  ❌ {str(e)[:100]}")
 
-# ========== 第二步：抓取动态网站 ==========
+# ========== 第二部分：动态网站 ==========
 print("\n" + "=" * 50)
 print("第二部分：抓取动态网站（Playwright）")
 print("=" * 50)
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
+    browser = p.chromium.launch(
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--dns-prefetch-disable",
+            "--host-resolver-rules=MAP * 114.114.114.114",  # 使用国内DNS
+        ]
+    )
     
     for src in dynamic_sources:
-        print(f"\n正在抓取: {src['name']}...")
+        print(f"\n正在抓取: {src['name']} ({src['url']})...")
         try:
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                ignore_https_errors=True,  # 忽略SSL证书错误
+                ignore_https_errors=True,
             )
             page = context.new_page()
             
-            # 尝试访问，超时设置短一点
+            # 增加超时时间，先尝试 http
             try:
-                page.goto(src["url"], timeout=20000, wait_until="domcontentloaded")
-            except:
-                # 如果正常访问失败，尝试 http
-                if src["url"].startswith("https://"):
+                page.goto(src["url"], timeout=60000, wait_until="networkidle")
+            except Exception as e1:
+                print(f"  首次访问失败: {str(e1)[:80]}")
+                # 尝试 https
+                if src["url"].startswith("http://"):
                     try:
-                        http_url = src["url"].replace("https://", "http://", 1)
-                        page.goto(http_url, timeout=20000, wait_until="domcontentloaded")
-                    except:
-                        print(f"  ❌ 无法访问")
+                        https_url = src["url"].replace("http://", "https://", 1)
+                        print(f"  尝试 https: {https_url}")
+                        page.goto(https_url, timeout=60000, wait_until="networkidle")
+                    except Exception as e2:
+                        print(f"  ❌ 最终无法访问: {str(e2)[:80]}")
                         context.close()
                         continue
                 else:
-                    print(f"  ❌ 无法访问")
                     context.close()
                     continue
             
             # 等待动态内容加载
-            page.wait_for_timeout(5000)
+            page.wait_for_timeout(8000)
             
-            # 获取所有包含公告特征的链接
+            # 获取所有链接
             links = page.query_selector_all("a")
+            print(f"  页面共有 {len(links)} 个链接")
             count = 0
             for a_tag in links[:50]:
                 try:
@@ -200,18 +211,15 @@ with sync_playwright() as p:
                     if not is_valid_title(title) or not href:
                         continue
                     
-                    # 只取政府信息公开内容链接
                     if "/content/post_" not in href and "/tzgg/" not in href:
                         continue
                     
-                    # 补全链接
                     if href.startswith("//"):
                         href = "https:" + href
                     elif href.startswith("/"):
                         domain = src["url"].split("/")[0] + "//" + src["url"].split("/")[2]
                         href = domain + href
                     
-                    # 提取日期
                     parent_text = a_tag.evaluate("el => el.parentElement?.innerText || ''")
                     pub_date = extract_date(parent_text) or extract_date(title) or datetime.now().strftime("%Y-%m-%d")
                     
@@ -229,7 +237,7 @@ with sync_playwright() as p:
             context.close()
             
         except Exception as e:
-            print(f"  ❌ {str(e)[:100]}")
+            print(f"  ❌ {str(e)[:150]}")
     
     browser.close()
 
