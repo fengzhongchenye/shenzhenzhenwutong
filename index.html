@@ -1,282 +1,62 @@
-import requests
-from bs4 import BeautifulSoup
-import json
-import re
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深圳政府通知公告聚合</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f7fa; }
+        h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 10px; }
+        .notice { background: white; border-left: 4px solid #e94560; padding: 12px 15px; margin: 10px 0; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .notice a { font-size: 16px; color: #16213e; text-decoration: none; font-weight: bold; }
+        .notice a:hover { text-decoration: underline; }
+        .meta { font-size: 13px; color: #555; margin-top: 4px; }
+        .meta span { margin-right: 15px; }
+        .source { background: #e94560; color: white; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+        .loading { text-align: center; padding: 50px; color: #999; }
+        .empty { text-align: center; padding: 50px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>📢 深圳政府通知公告</h1>
+    <p style="color:#666;">仅显示2026年5月1日之后发布的通知（每天早上9点更新）</p>
+    <div id="notice-container" class="loading">正在加载通知...</div>
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-}
+    <script>
+        const CUTOFF_DATE = new Date("2026-05-01");
+        const CONTAINER = document.getElementById("notice-container");
 
-def fetch_url(url):
-    try:
-        resp = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
-        if resp.status_code == 200:
-            return resp
-    except:
-        pass
-    
-    if url.startswith("https://"):
-        try:
-            http_url = url.replace("https://", "http://", 1)
-            resp = requests.get(http_url, headers=headers, timeout=30, allow_redirects=True)
-            if resp.status_code == 200:
-                return resp
-        except:
-            pass
-    return None
+        fetch("notices.json")
+            .then(res => res.json())
+            .then(data => {
+                const filtered = data.filter(item => {
+                    const d = new Date(item.date);
+                    return d >= CUTOFF_DATE;
+                });
+                filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+                if (filtered.length === 0) {
+                    CONTAINER.innerHTML = '<div class="empty">暂无符合条件的通知公告。</div>';
+                    return;
+                }
 
-sources = [
-    # ===== 正常列表页网站 =====
-    {"name": "深圳市工业和信息化局", "url": "http://gxj.sz.gov.cn/xxgk/xxgkml/qt/tzgg/", "type": "normal"},
-    {"name": "深圳市科技创新局", "url": "http://stic.sz.gov.cn/xxgk/tzgg/", "type": "normal"},
-    {"name": "龙岗区科技创新局", "url": "http://www.lg.gov.cn/bmzz/kjj/xxgk/qt/tzgg/", "type": "normal"},
-    {"name": "龙岗区工业和信息化局", "url": "http://www.lg.gov.cn/bmzz/gxj/xxgk/qt/tzgg/", "type": "normal"},
-    {"name": "龙华区工业和信息化局", "url": "http://www.szlhq.gov.cn/bmxxgk/jjcjj/dtxx_124217/tzgg_124219/", "type": "normal"},
-    {"name": "龙华区科技创新局", "url": "http://www.szlhq.gov.cn/bmxxgk/kjcxj/dtxx_124254/tzgg_124256/", "type": "normal"},
-    {"name": "福田区工业和信息化局", "url": "https://www.szft.gov.cn/bmxx/qgxj/tzgg/", "type": "normal"},
-    {"name": "福田区科技创新局", "url": "https://www.szft.gov.cn/bmxx/qkjj/tzgg/index.html", "type": "normal"},
-    {"name": "深圳市中小企业服务局", "url": "http://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html", "type": "normal"},
-    
-    # ===== gkmlpt 网站 =====
-    {"name": "罗湖区科技和工业信息化局", "url": "https://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "坪山区科技创新局", "url": "https://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "坪山区工业和信息化局", "url": "https://www.szpsq.gov.cn/psjjhkjcjj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "光明区科技创新局", "url": "https://www.szgm.gov.cn/gmkjcxj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "光明区工业和信息化局", "url": "https://www.szgm.gov.cn/gmjjfw/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "大鹏新区科技和工业信息化局", "url": "https://www.dpxq.gov.cn/dpkjcxjjfwj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "宝安区科技创新局", "url": "https://www.baoan.gov.cn/bakj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "宝安区工业和信息化局", "url": "https://www.baoan.gov.cn/bajjcj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "南山区科技创新局", "url": "https://www.szns.gov.cn/nsqkcj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "南山区工业和信息化局", "url": "https://www.szns.gov.cn/nsqjjcjj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "盐田区科技创新局", "url": "https://www.yantian.gov.cn/ytkcj/gkmlpt/index", "type": "gkmlpt"},
-    {"name": "盐田区工业和信息化局", "url": "https://www.yantian.gov.cn/ytgyhxxhj/gkmlpt/index", "type": "gkmlpt"},
-]
-
-TITLE_BLACKLIST = [
-    "Language", "FRANÇAIS", "العربية", "首页", "下一页", "上一页",
-    "无障碍", "长者助手", "繁体", "English", "日本語", "한국어",
-    "网站地图", "关于我们", "联系我们", "法律声明", "无障碍浏览",
-]
-
-def is_valid_title(title):
-    if len(title) < 5:
-        return False
-    for bad in TITLE_BLACKLIST:
-        if bad.lower() in title.lower():
-            return False
-    return True
-
-def extract_date(text):
-    patterns = [
-        r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})",
-        r"(\d{4})年(\d{1,2})月(\d{1,2})日",
-    ]
-    for p in patterns:
-        m = re.search(p, text)
-        if m:
-            return f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
-    return None
-
-def extract_from_html(soup, base_url, source_name):
-    """从HTML中提取公告"""
-    notices = []
-    
-    # 方式1：找 document-number 类的链接
-    doc_links = soup.find_all("a", class_="document-number")
-    if doc_links:
-        for a_tag in doc_links[:30]:
-            try:
-                title = re.sub(r'^[\d\.\、\s]+', '', a_tag.get_text(strip=True))
-                link = a_tag.get("href", "")
-                if not is_valid_title(title) or not link:
-                    continue
-                
-                if link.startswith("//"):
-                    link = "https:" + link
-                elif link.startswith("/"):
-                    domain = "/".join(base_url.split("/")[:3])
-                    link = domain + link
-                elif not link.startswith("http"):
-                    link = base_url.rstrip("/") + "/" + link.lstrip("/")
-                
-                pub_date = extract_date(str(a_tag.parent)) or extract_date(title) or datetime.now().strftime("%Y-%m-%d")
-                
-                notices.append({
-                    "source": source_name,
-                    "title": title,
-                    "link": link,
-                    "date": pub_date,
-                })
-            except:
-                continue
-        return notices
-    
-    # 方式2：找 content/post_ 链接
-    all_links = soup.find_all("a", href=True)
-    for a_tag in all_links:
-        href = a_tag.get("href", "")
-        if "/content/post_" in href:
-            title = a_tag.get_text(strip=True)
-            if is_valid_title(title):
-                link = href
-                if link.startswith("//"):
-                    link = "https:" + link
-                elif link.startswith("/"):
-                    domain = "/".join(base_url.split("/")[:3])
-                    link = domain + link
-                elif not link.startswith("http"):
-                    link = base_url.rstrip("/") + "/" + link.lstrip("/")
-                
-                pub_date = extract_date(str(a_tag.parent)) or extract_date(title) or datetime.now().strftime("%Y-%m-%d")
-                
-                notices.append({
-                    "source": source_name,
-                    "title": re.sub(r'^[\d\.\、\s]+', '', title),
-                    "link": link,
-                    "date": pub_date,
-                })
-    
-    return notices
-
-def extract_from_script(soup, base_url, source_name):
-    """从script标签中提取JSON数据"""
-    notices = []
-    
-    # 查找所有script标签
-    for script in soup.find_all("script"):
-        text = script.string or ""
-        if not text:
-            continue
-        
-        # 尝试找到包含 infoList 或 articleList 的 JSON
-        patterns = [
-            r'infoList["\']?\s*[:=]\s*(\[.*?\])',
-            r'articleList["\']?\s*[:=]\s*(\[.*?\])',
-            r'list["\']?\s*[:=]\s*(\[.*?\])',
-            r'"rows"\s*:\s*(\[.*?\])',
-        ]
-        
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.DOTALL)
-            for match in matches:
-                try:
-                    # 尝试截取完整的JSON数组
-                    bracket_count = 0
-                    end_idx = 0
-                    for i, c in enumerate(match):
-                        if c == '[':
-                            bracket_count += 1
-                        elif c == ']':
-                            bracket_count -= 1
-                            if bracket_count == 0:
-                                end_idx = i + 1
-                                break
-                    
-                    json_str = match[:end_idx]
-                    data = json.loads(json_str)
-                    
-                    if isinstance(data, list):
-                        for item in data[:30]:
-                            title = item.get("title") or item.get("articleTitle") or item.get("infoTitle") or ""
-                            link = item.get("url") or item.get("articleUrl") or item.get("infoUrl") or item.get("redirectUrl") or ""
-                            pub_date_str = item.get("publishDate") or item.get("createDate") or item.get("pubDate") or ""
-                            
-                            if not title or not link:
-                                continue
-                            
-                            title = re.sub(r'<[^>]+>', '', title).strip()
-                            title = re.sub(r'^[\d\.\、\s]+', '', title)
-                            
-                            if not is_valid_title(title):
-                                continue
-                            
-                            if link.startswith("./"):
-                                link = base_url.rstrip("/") + link[1:]
-                            elif link.startswith("/"):
-                                domain = "/".join(base_url.split("/")[:3])
-                                link = domain + link
-                            elif not link.startswith("http"):
-                                link = base_url.rstrip("/") + "/" + link
-                            
-                            pub_date = extract_date(pub_date_str) or datetime.now().strftime("%Y-%m-%d")
-                            
-                            notices.append({
-                                "source": source_name,
-                                "title": title,
-                                "link": link,
-                                "date": pub_date,
-                            })
-                except:
-                    continue
-    
-    return notices
-
-
-all_notices = []
-
-for src in sources:
-    print(f"正在抓取: {src['name']}...")
-    try:
-        if src["type"] == "normal":
-            resp = fetch_url(src["url"])
-            if not resp or resp.status_code != 200:
-                print(f"  ❌ HTTP {resp.status_code if resp else 'error'}")
-                continue
-            
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
-            
-            # 用extract_from_html处理
-            notices = extract_from_html(soup, src["url"], src["name"])
-            
-            if notices:
-                print(f"  提取到 {len(notices)} 条")
-                all_notices.extend(notices)
-                for n in notices[:3]:
-                    print(f"  ✅ {n['title'][:50]}... {n['date']}")
-            else:
-                print(f"  ❌ 未提取到公告")
-        
-        else:  # gkmlpt
-            resp = fetch_url(src["url"])
-            if not resp or resp.status_code != 200:
-                print(f"  ❌ HTTP {resp.status_code if resp else 'error'}")
-                continue
-            
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
-            
-            # 先尝试HTML提取
-            notices = extract_from_html(soup, src["url"], src["name"])
-            
-            # 如果HTML没有，尝试从script中提取
-            if not notices:
-                notices = extract_from_script(soup, src["url"], src["name"])
-            
-            if notices:
-                print(f"  提取到 {len(notices)} 条")
-                all_notices.extend(notices)
-                for n in notices[:3]:
-                    print(f"  ✅ {n['title'][:50]}... {n['date']}")
-            else:
-                print(f"  ❌ 未提取到公告")
-                    
-    except Exception as e:
-        print(f"  ❌ {str(e)[:100]}")
-
-# 去重
-seen = set()
-unique = [n for n in all_notices if n["link"] not in seen and not seen.add(n["link"])]
-unique.sort(key=lambda x: x["date"], reverse=True)
-
-with open("notices.json", "w", encoding="utf-8") as f:
-    json.dump(unique, f, ensure_ascii=False, indent=2)
-
-print(f"\n✅ 共 {len(unique)} 条")
-from collections import Counter
-for name, count in Counter(n["source"] for n in unique).most_common():
-    print(f"  {name}: {count} 条")
+                let html = "";
+                filtered.forEach(item => {
+                    html += `
+                    <div class="notice">
+                        <a href="${item.link}" target="_blank">${item.title}</a>
+                        <div class="meta">
+                            <span>📅 ${item.date}</span>
+                            <span class="source">${item.source}</span>
+                        </div>
+                    </div>`;
+                });
+                CONTAINER.innerHTML = html;
+            })
+            .catch(err => {
+                CONTAINER.innerHTML = '<div class="empty">加载失败，请稍后再试。</div>';
+                console.error(err);
+            });
+    </script>
+</body>
+</html>
