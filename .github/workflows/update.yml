@@ -11,19 +11,17 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright/python:v1.62.0-jammy
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Configure Git safe directory
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 playwright
-          playwright install-deps
+        run: pip install requests beautifulsoup4
 
       - name: Run scraper
         run: python fetch_notices.py
