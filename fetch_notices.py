@@ -22,7 +22,7 @@ static_sources = [
     {"name": "深圳市中小企业服务局", "url": "http://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html"},
 ]
 
-# ===== 动态网站（用 curl 尝试抓取）=====
+# ===== 动态网站（curl 尝试）=====
 dynamic_sources = [
     {"name": "罗湖区科技和工业信息化局", "url": "https://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/index"},
     {"name": "坪山区科技创新局", "url": "https://www.szpsq.gov.cn/pskjcxfws/gkmlpt/index"},
@@ -75,10 +75,9 @@ def fetch_with_requests(url):
     return None
 
 def fetch_with_curl(url):
-    """用 curl 命令抓取，有些网站 curl 能连通"""
     try:
         result = subprocess.run(
-            ["curl", "-s", "-L", "--max-time", "20", "-H", 
+            ["curl", "-s", "-L", "--max-time", "20", "-H",
              "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", url],
             capture_output=True, text=True, timeout=25
         )
@@ -87,7 +86,6 @@ def fetch_with_curl(url):
     except:
         pass
     
-    # 尝试 http
     if url.startswith("https://"):
         try:
             http_url = url.replace("https://", "http://", 1)
@@ -114,7 +112,7 @@ def extract_links(html):
 
 all_notices = []
 
-# ========== 第一部分：静态网站 ==========
+# ========== 静态网站 ==========
 print("=" * 50)
 print("静态网站（requests）")
 print("=" * 50)
@@ -166,7 +164,7 @@ for src in static_sources:
     except Exception as e:
         print(f"  ❌ {str(e)[:80]}")
 
-# ========== 第二部分：动态网站（curl）==========
+# ========== 动态网站（curl）==========
 print("\n" + "=" * 50)
 print("动态网站（curl）")
 print("=" * 50)
