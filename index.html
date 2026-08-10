@@ -44,10 +44,11 @@
         const TABS_CONTAINER = document.getElementById("tabs-container");
         const COUNT_INFO = document.getElementById("count-info");
         
-        // 分类规则
         const categories = {
             "全部": () => true,
-            "市级": n => ["深圳市"].some(x => n.source.startsWith(x)) && !["罗湖","福田","南山","宝安","龙岗","龙华","坪山","光明","盐田","大鹏"].some(x => n.source.includes(x)),
+            "市工信局": n => n.source.includes("深圳市工业和信息化局"),
+            "市科创局": n => n.source.includes("深圳市科技创新"),
+            "市中小企业服务局": n => n.source.includes("深圳市中小企业服务局"),
             "罗湖区": n => n.source.includes("罗湖"),
             "福田区": n => n.source.includes("福田"),
             "南山区": n => n.source.includes("南山"),
@@ -63,7 +64,6 @@
         let allNotices = [];
         let currentTab = "全部";
         
-        // 创建标签
         Object.keys(categories).forEach(name => {
             const tab = document.createElement("span");
             tab.className = "tab" + (name === currentTab ? " active" : "");
