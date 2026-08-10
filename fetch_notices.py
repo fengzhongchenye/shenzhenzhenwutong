@@ -8,7 +8,6 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 }
 
-# ===== 静态网站（requests）=====
 static_sources = [
     {"name": "深圳市工业和信息化局", "url": "http://gxj.sz.gov.cn/xxgk/xxgkml/qt/tzgg/"},
     {"name": "深圳市科技创新局", "url": "http://stic.sz.gov.cn/xxgk/tzgg/"},
@@ -21,7 +20,6 @@ static_sources = [
     {"name": "深圳市中小企业服务局", "url": "http://zxqyj.sz.gov.cn/zwgk/zfxxgkml/tzgg/index.html"},
 ]
 
-# ===== 动态网站（API 接口）=====
 api_sources = [
     {"name": "罗湖区科技和工业信息化局", "api": "http://www.szlh.gov.cn/lhqkjhgyxxhj/gkmlpt/api/all/0?page=1&sid=755325"},
     {"name": "坪山区科技创新局", "api": "http://www.szpsq.gov.cn/pskjcxfws/gkmlpt/api/all/0?page=1&sid=755325"},
@@ -54,6 +52,13 @@ def is_valid_title(title):
         return False
     for bad in TITLE_BLACKLIST:
         if bad.lower() in title.lower():
+            return False
+    return True
+
+def is_valid_link(link):
+    bad_patterns = ["/english/", "/Special/", "/welcome/", "/ALB/", "/FR/", "/JP/", "/KR/"]
+    for pattern in bad_patterns:
+        if pattern.lower() in link.lower():
             return False
     return True
 
@@ -90,7 +95,6 @@ def fetch_url(url):
 
 all_notices = []
 
-# ========== 静态网站 ==========
 print("=" * 50)
 print("静态网站")
 print("=" * 50)
@@ -124,7 +128,7 @@ for src in static_sources:
             try:
                 title = re.sub(r'^[\d\.\、\s]+', '', a_tag.get_text(strip=True))
                 link = a_tag.get("href", "")
-                if not title or not link:
+                if not title or not link or not is_valid_link(link):
                     continue
                 
                 if link.startswith("//"):
@@ -142,7 +146,6 @@ for src in static_sources:
     except Exception as e:
         print(f"  [失败] {str(e)[:80]}")
 
-# ========== API 网站 ==========
 print("\n" + "=" * 50)
 print("API 网站")
 print("=" * 50)
@@ -175,6 +178,9 @@ for src in api_sources:
             base = src["api"].split("/gkmlpt")[0]
             link = f"{base}/gkmlpt/content/12/{str(link_id)[:5]}/post_{link_id}.html"
             
+            if not is_valid_link(link):
+                continue
+            
             all_notices.append({
                 "source": src["name"],
                 "title": title.strip(),
@@ -184,7 +190,6 @@ for src in api_sources:
     except Exception as e:
         print(f"  [失败] {str(e)[:80]}")
 
-# ========== 去重排序 ==========
 seen = set()
 unique = [n for n in all_notices if n["link"] not in seen and not seen.add(n["link"])]
 unique.sort(key=lambda x: x["date"], reverse=True)
