@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -68,6 +68,14 @@ def extract_date(text):
         return f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
     return None
 
+def timestamp_to_date(ts):
+    """Unix 时间戳转日期字符串"""
+    try:
+        dt = datetime.fromtimestamp(int(ts), tz=timezone(timedelta(hours=8)))
+        return dt.strftime("%Y-%m-%d")
+    except:
+        return None
+
 def fetch_url(url):
     try:
         resp = requests.get(url, headers=headers, timeout=15, verify=False)
@@ -95,6 +103,7 @@ def fetch_url(url):
 
 all_notices = []
 
+# ========== 静态网站 ==========
 print("=" * 50)
 print("静态网站")
 print("=" * 50)
@@ -146,6 +155,7 @@ for src in static_sources:
     except Exception as e:
         print(f"  [失败] {str(e)[:80]}")
 
+# ========== API 网站 ==========
 print("\n" + "=" * 50)
 print("API 网站")
 print("=" * 50)
@@ -167,16 +177,22 @@ for src in api_sources:
         
         for item in articles[:30]:
             title = item.get("title", "")
-            link_id = item.get("id", "")
+            link = item.get("url", "")
             
-            if not title or not link_id:
+            # 日期：优先用 display_publish_time，其次 created_at
+            pub_date = None
+            if "display_publish_time" in item and item["display_publish_time"]:
+                pub_date = timestamp_to_date(item["display_publish_time"])
+            if not pub_date and "created_at" in item and item["created_at"]:
+                pub_date = item["created_at"][:10]
+            if not pub_date:
+                pub_date = datetime.now().strftime("%Y-%m-%d")
+            
+            if not title or not link:
                 continue
             
             if not is_valid_title(title):
                 continue
-            
-            base = src["api"].split("/gkmlpt")[0]
-            link = f"{base}/gkmlpt/content/12/{str(link_id)[:5]}/post_{link_id}.html"
             
             if not is_valid_link(link):
                 continue
@@ -185,11 +201,12 @@ for src in api_sources:
                 "source": src["name"],
                 "title": title.strip(),
                 "link": link,
-                "date": datetime.now().strftime("%Y-%m-%d"),
+                "date": pub_date,
             })
     except Exception as e:
         print(f"  [失败] {str(e)[:80]}")
 
+# ========== 去重排序 ==========
 seen = set()
 unique = [n for n in all_notices if n["link"] not in seen and not seen.add(n["link"])]
 unique.sort(key=lambda x: x["date"], reverse=True)
