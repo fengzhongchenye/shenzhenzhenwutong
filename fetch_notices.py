@@ -45,6 +45,8 @@ TITLE_BLACKLIST = [
     "招标采购", "建议提案", "监督渠道", "信息公开年报",
     "政策", "政府信息公开指南", "政府信息公开制度",
     "栏目更新情况说明", "职责", "主办单位",
+    "English", "Special", "日本語", "한국어", "Francais",
+    "Arabic", "Portugues", "Español",
 ]
 
 def is_valid_title(title):
@@ -167,7 +169,6 @@ for src in api_sources:
             if not title or not link_id:
                 continue
             
-            # 过滤无效标题
             if not is_valid_title(title):
                 continue
             
