@@ -37,11 +37,20 @@ api_sources = [
     {"name": "盐田区工业和信息化局", "api": "http://www.yantian.gov.cn/ytgyhxxhj/gkmlpt/api/all/0?page=1&sid=755325"},
 ]
 
+TITLE_BLACKLIST = [
+    "Language", "FRANÇAIS", "首页", "下一页", "上一页",
+    "无障碍", "长者助手", "网站地图", "关于我们", "跳转", "收藏",
+    "政务公开", "政务服务", "政民互动", "政府信息公开",
+    "法定主动公开", "机构职能", "规划计划", "财政审计",
+    "招标采购", "建议提案", "监督渠道", "信息公开年报",
+    "政策", "政府信息公开指南", "政府信息公开制度",
+    "栏目更新情况说明", "职责", "主办单位",
+]
+
 def is_valid_title(title):
-    if len(title) < 4:
+    if len(title) < 5:
         return False
-    blacklist = ["Language", "FRANÇAIS", "首页", "下一页", "上一页", "无障碍", "长者助手", "网站地图", "关于我们", "跳转", "收藏"]
-    for bad in blacklist:
+    for bad in TITLE_BLACKLIST:
         if bad.lower() in title.lower():
             return False
     return True
@@ -156,6 +165,10 @@ for src in api_sources:
             link_id = item.get("id", "")
             
             if not title or not link_id:
+                continue
+            
+            # 过滤无效标题
+            if not is_valid_title(title):
                 continue
             
             base = src["api"].split("/gkmlpt")[0]
