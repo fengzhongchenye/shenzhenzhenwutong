@@ -5,57 +5,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>深圳政府通知公告聚合</title>
     <style>
-        body { font-family: "Microsoft YaHei", sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f7fa; }
-        h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 10px; }
-        .notice { background: white; border-left: 4px solid #e94560; padding: 12px 15px; margin: 10px 0; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .notice a { font-size: 16px; color: #16213e; text-decoration: none; font-weight: bold; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; background: #f5f7fa; }
+        .header { background: #1a1a2e; color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 24px; }
+        .header p { font-size: 13px; color: #aaa; margin-top: 5px; }
+        .tabs { display: flex; flex-wrap: wrap; background: white; padding: 10px 20px; gap: 8px; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 100; }
+        .tab { padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 14px; border: 1px solid #ddd; background: white; color: #555; white-space: nowrap; transition: all 0.2s; }
+        .tab:hover { background: #f0f0ff; }
+        .tab.active { background: #e94560; color: white; border-color: #e94560; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .notice { background: white; border-left: 4px solid #e94560; padding: 12px 15px; margin: 8px 0; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .notice a { font-size: 15px; color: #16213e; text-decoration: none; font-weight: bold; }
         .notice a:hover { text-decoration: underline; }
-        .meta { font-size: 13px; color: #555; margin-top: 4px; }
-        .meta span { margin-right: 15px; }
-        .source { background: #e94560; color: white; padding: 1px 6px; border-radius: 3px; font-size: 12px; }
-        .loading { text-align: center; padding: 50px; color: #999; }
-        .empty { text-align: center; padding: 50px; color: #666; }
+        .meta { font-size: 12px; color: #888; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .source-tag { background: #e94560; color: white; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+        .count-info { text-align: center; color: #999; font-size: 13px; margin-bottom: 15px; }
+        .loading { text-align: center; padding: 60px; color: #999; }
+        .empty { text-align: center; padding: 60px; color: #666; }
     </style>
 </head>
 <body>
-    <h1>📢 深圳政府通知公告</h1>
-    <p style="color:#666;">仅显示2026年5月1日之后发布的通知（每天早上9点更新）</p>
-    <div id="notice-container" class="loading">正在加载通知...</div>
+    <div class="header">
+        <h1>📢 深圳政府通知公告</h1>
+        <p>2026年5月1日之后的通知 · 每天早上9点自动更新</p>
+    </div>
+
+    <div class="tabs" id="tabs-container"></div>
+
+    <div class="container">
+        <div class="count-info" id="count-info"></div>
+        <div id="notice-container" class="loading">正在加载通知...</div>
+    </div>
 
     <script>
         const CUTOFF_DATE = new Date("2026-05-01");
         const CONTAINER = document.getElementById("notice-container");
-
+        const TABS_CONTAINER = document.getElementById("tabs-container");
+        const COUNT_INFO = document.getElementById("count-info");
+        
+        // 分类规则
+        const categories = {
+            "全部": () => true,
+            "市级": n => ["深圳市"].some(x => n.source.startsWith(x)) && !["罗湖","福田","南山","宝安","龙岗","龙华","坪山","光明","盐田","大鹏"].some(x => n.source.includes(x)),
+            "罗湖区": n => n.source.includes("罗湖"),
+            "福田区": n => n.source.includes("福田"),
+            "南山区": n => n.source.includes("南山"),
+            "宝安区": n => n.source.includes("宝安"),
+            "龙岗区": n => n.source.includes("龙岗"),
+            "龙华区": n => n.source.includes("龙华"),
+            "坪山区": n => n.source.includes("坪山"),
+            "光明区": n => n.source.includes("光明"),
+            "盐田区": n => n.source.includes("盐田"),
+            "大鹏新区": n => n.source.includes("大鹏"),
+        };
+        
+        let allNotices = [];
+        let currentTab = "全部";
+        
+        // 创建标签
+        Object.keys(categories).forEach(name => {
+            const tab = document.createElement("span");
+            tab.className = "tab" + (name === currentTab ? " active" : "");
+            tab.textContent = name;
+            tab.onclick = () => switchTab(name);
+            TABS_CONTAINER.appendChild(tab);
+        });
+        
+        function switchTab(name) {
+            currentTab = name;
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tab").forEach(t => { if (t.textContent === name) t.classList.add("active"); });
+            render();
+        }
+        
+        function render() {
+            const filtered = allNotices.filter(n => {
+                const d = new Date(n.date);
+                return d >= CUTOFF_DATE && categories[currentTab](n);
+            });
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            COUNT_INFO.textContent = `${currentTab} · 共 ${filtered.length} 条`;
+            
+            if (filtered.length === 0) {
+                CONTAINER.innerHTML = '<div class="empty">暂无通知公告</div>';
+                return;
+            }
+            
+            let html = "";
+            filtered.forEach(item => {
+                html += `
+                <div class="notice">
+                    <a href="${item.link}" target="_blank">${item.title}</a>
+                    <div class="meta">
+                        <span>📅 ${item.date}</span>
+                        <span class="source-tag">${item.source}</span>
+                    </div>
+                </div>`;
+            });
+            CONTAINER.innerHTML = html;
+        }
+        
         fetch("notices.json")
             .then(res => res.json())
             .then(data => {
-                const filtered = data.filter(item => {
-                    const d = new Date(item.date);
-                    return d >= CUTOFF_DATE;
-                });
-                filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                if (filtered.length === 0) {
-                    CONTAINER.innerHTML = '<div class="empty">暂无符合条件的通知公告。</div>';
-                    return;
-                }
-
-                let html = "";
-                filtered.forEach(item => {
-                    html += `
-                    <div class="notice">
-                        <a href="${item.link}" target="_blank">${item.title}</a>
-                        <div class="meta">
-                            <span>📅 ${item.date}</span>
-                            <span class="source">${item.source}</span>
-                        </div>
-                    </div>`;
-                });
-                CONTAINER.innerHTML = html;
+                allNotices = data;
+                render();
             })
             .catch(err => {
                 CONTAINER.innerHTML = '<div class="empty">加载失败，请稍后再试。</div>';
-                console.error(err);
             });
     </script>
 </body>
